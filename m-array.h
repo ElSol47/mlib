@@ -81,7 +81,7 @@
 /* FIXME: Do we want to export some methods as they are slow and 
    are not fit to be used for building other methods (like _it_remove)? */
 #define M_ARRA4_OPLIST_P3(name, oplist)                                       \
-  (INIT(M_F(name, _init))                                                     \
+  ( M_USER_INIT_OPERATOR(name, oplist),                                       \
    ,M_IF_METHOD2(INIT_SET,SET, oplist)(INIT_SET(M_F(name, _init_set)),)       \
    ,M_IF_METHOD(INIT_SET, oplist)(INIT_WITH(API_1(M_INIT_WITH_VAI)),)         \
    ,M_IF_METHOD2(INIT_SET,SET, oplist)(SET(M_F(name, _set)), )                \
@@ -173,7 +173,8 @@
   M_CHECK_COMPATIBLE_OPLIST(name, 1, type, oplist)                            \
   M_ARRA4_DEF_CORE(name, type, oplist, array_t, it_t)                         \
   M_ARRA4_DEF_IO(name, type, oplist, array_t, it_t)                           \
-  M_EMPLACE_QUEUE_DEF(name, array_t, M_F(name, _emplace_back), oplist, M_ARRA4_EMPLACE_DEF)
+  M_EMPLACE_QUEUE_DEF(name, array_t, M_F(name, _emplace_back), oplist, M_ARRA4_EMPLACE_DEF) \
+  M_USER_DEF_GEN(oplist, name, array_t)
 
 /* Define the types */
 #define M_ARRA4_DEF_TYPE(name, type, oplist, array_t, it_t)                   \
@@ -183,6 +184,7 @@
     size_t size;            /* Number of elements in the array */             \
     size_t alloc;           /* Allocated size for the array base */           \
     type *ptr;              /* Pointer to the array base */                   \
+    M_USER_FIELD(oplist)                                                      \
   } array_t[1];                                                               \
                                                                               \
   /* Define an iterator over an array */                                      \
@@ -202,10 +204,23 @@
 #define M_ARRA4_DEF_CORE(name, type, oplist, array_t, it_t)                   \
                                                                               \
   M_INLINE void                                                               \
-  M_F(name, _init)(array_t v)                                                 \
+  M_C3(m_arra4_,name,_realloc)(array_t m_v, size_t alloc)                     \
+  {                                                                           \
+      type *ptr = M_CALL_REALLOC(oplist, type, m_v->ptr, alloc);              \
+      if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                  \
+        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
+        return;                                                               \
+      }                                                                       \
+      m_v->ptr = ptr;                                                         \
+      m_v->alloc = alloc;                                                     \
+  }                                                                           \
+                                                                              \
+  M_INLINE void                                                               \
+  M_F(name, _init)(array_t v M_USER_PARAM(oplist))                            \
   {                                                                           \
     M_ASSERT (v != NULL);                                                     \
     /* Initially, the array is empty with nothing allocated */                \
+    M_USER_INIT(oplist, v, user_data);                                        \
     v->size  = 0;                                                             \
     v->alloc = 0;                                                             \
     v->ptr   = NULL;                                                          \
@@ -223,14 +238,14 @@
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
-  M_F(name, _clear)(array_t v)                                                \
+  M_F(name, _clear)(array_t m_v)                                              \
   {                                                                           \
-    M_ARRA4_CONTRACT(v);                                                      \
-    M_F(name, _reset)(v);                                                     \
-    M_CALL_FREE(oplist, v->ptr);                                              \
+    M_ARRA4_CONTRACT(m_v);                                                    \
+    M_F(name, _reset)(m_v);                                                   \
+    M_CALL_FREE(oplist, m_v->ptr);                                            \
     /* This is so reusing the object implies an assertion failure */          \
-    v->alloc = 1;                                                             \
-    v->ptr = NULL;                                                            \
+    m_v->alloc = 1;                                                           \
+    m_v->ptr = NULL;                                                          \
   }                                                                           \
                                                                               \
   M_IF_METHOD2(INIT_SET, SET, oplist)(                                        \
@@ -242,13 +257,7 @@
     if (M_UNLIKELY (d == s)) return;                                          \
     if (s->size > d->alloc) {                                                 \
       const size_t alloc = s->size;                                           \
-      type *ptr = M_CALL_REALLOC(oplist, type, d->ptr, alloc);                \
-      if (M_UNLIKELY_NOMEM (ptr == NULL)) {                                   \
-        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
-        return ;                                                              \
-      }                                                                       \
-      d->ptr = ptr;                                                           \
-      d->alloc = alloc;                                                       \
+      M_C3(m_arra4_,name,_realloc)(d, alloc);                                 \
     }                                                                         \
     size_t i;                                                                 \
     size_t step1 = M_MIN(s->size, d->size);                                   \
@@ -266,7 +275,7 @@
   M_F(name, _init_set)(array_t d, const array_t s)                            \
   {                                                                           \
     M_ASSERT (d != s);                                                        \
-    M_F(name, _init)(d);                                                      \
+    M_F(name, _init)(d M_USER_CALL(oplist, M_USER_DATA(s)));                  \
     M_F(name, _set)(d, s);                                                    \
   }                                                                           \
   , /* No SET & INIT_SET */)                                                  \
@@ -276,10 +285,11 @@
   {                                                                           \
     M_ASSERT (d != s);                                                        \
     M_ARRA4_CONTRACT(s);                                                      \
+    M_USER_INIT(opl, d, M_USER_DATA(s));                                      \
     d->size  = s->size;                                                       \
     d->alloc = s->alloc;                                                      \
     d->ptr   = s->ptr;                                                        \
-    /* Robustness */                                                          \
+    /* Robustness: invalid representation of an array */                      \
     s->alloc = 1;                                                             \
     s->ptr   = NULL;                                                          \
     M_ARRA4_CONTRACT(d);                                                      \
@@ -325,13 +335,7 @@
         return NULL;                                                          \
       }                                                                       \
       M_ASSERT (alloc > v->size);                                             \
-      type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);                \
-      if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                  \
-        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
-        return NULL;                                                          \
-      }                                                                       \
-      v->ptr = ptr;                                                           \
-      v->alloc = alloc;                                                       \
+      M_C3(m_arra4_,name,_realloc)(v, alloc);                                 \
     }                                                                         \
     M_ASSERT(v->ptr != NULL);                                                 \
     type *ret = &v->ptr[v->size];                                             \
@@ -390,13 +394,7 @@
         return ;                                                              \
       }                                                                       \
       M_ASSERT (alloc > v->size);                                             \
-      type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);                \
-      if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                  \
-        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
-        return;                                                               \
-      }                                                                       \
-      v->ptr = ptr;                                                           \
-      v->alloc = alloc;                                                       \
+      M_C3(m_arra4_,name,_realloc)(v, alloc);                                 \
     }                                                                         \
     M_ASSERT(v->ptr != NULL);                                                 \
     memmove(&v->ptr[key+1], &v->ptr[key], (v->size-key)*sizeof(type));        \
@@ -420,13 +418,7 @@
       /* Increase size of array */                                            \
       if (size > v->alloc) {                                                  \
         size_t alloc = size ;                                                 \
-        type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);              \
-        if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                \
-          M_MEMORY_FULL(sizeof (type) * alloc);                               \
-          return;                                                             \
-        }                                                                     \
-        v->ptr = ptr;                                                         \
-        v->alloc = alloc;                                                     \
+        M_C3(m_arra4_,name,_realloc)(v, alloc);                               \
       }                                                                       \
       for(size_t i = v->size ; i < size; i++)                                 \
         M_CALL_INIT(oplist, v->ptr[i]);                                       \
@@ -437,27 +429,21 @@
   , /* No INIT */ )                                                           \
                                                                               \
   M_INLINE void                                                               \
-  M_F(name, _reserve)(array_t v, size_t alloc)                                \
+  M_F(name, _reserve)(array_t m_v, size_t alloc)                              \
   {                                                                           \
-    M_ARRA4_CONTRACT(v);                                                      \
+    M_ARRA4_CONTRACT(m_v);                                                    \
     /* NOTE: Reserve below needed size to perform a shrink to fit */          \
-    if (v->size > alloc) {                                                    \
-      alloc = v->size;                                                        \
+    if (m_v->size > alloc) {                                                  \
+      alloc = m_v->size;                                                      \
     }                                                                         \
     if (M_UNLIKELY (alloc == 0)) {                                            \
-      M_CALL_FREE(oplist, v->ptr);                                            \
-      v->size = v->alloc = 0;                                                 \
-      v->ptr = NULL;                                                          \
+      M_CALL_FREE(oplist, m_v->ptr);                                          \
+      m_v->size = m_v->alloc = 0;                                             \
+      m_v->ptr = NULL;                                                        \
     } else {                                                                  \
-      type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);                \
-      if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                  \
-        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
-        return;                                                               \
-      }                                                                       \
-      v->ptr = ptr;                                                           \
-      v->alloc = alloc;                                                       \
+      M_C3(m_arra4_,name,_realloc)(m_v, alloc);                               \
     }                                                                         \
-    M_ARRA4_CONTRACT(v);                                                      \
+    M_ARRA4_CONTRACT(m_v);                                                    \
   }                                                                           \
                                                                               \
   M_IF_METHOD(INIT, oplist)(                                                  \
@@ -476,13 +462,7 @@
           M_MEMORY_FULL(sizeof (type) * alloc);                               \
           return NULL;                                                        \
         }                                                                     \
-        type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);              \
-        if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                \
-          M_MEMORY_FULL(sizeof (type) * alloc);                               \
-          return NULL;                                                        \
-        }                                                                     \
-        v->ptr = ptr;                                                         \
-        v->alloc = alloc;                                                     \
+        M_C3(m_arra4_,name,_realloc)(v, alloc);                               \
       }                                                                       \
       for(size_t i = v->size ; i < size; i++)                                 \
         M_CALL_INIT(oplist, v->ptr[i]);                                       \
@@ -604,13 +584,7 @@
         M_MEMORY_FULL(sizeof (type) * alloc);                                 \
         return ;                                                              \
       }                                                                       \
-      type *ptr = M_CALL_REALLOC(oplist, type, v->ptr, alloc);                \
-      if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                  \
-        M_MEMORY_FULL(sizeof (type) * alloc);                                 \
-        return;                                                               \
-      }                                                                       \
-      v->ptr = ptr;                                                           \
-      v->alloc = alloc;                                                       \
+      M_C3(m_arra4_,name,_realloc)(v, alloc);                                 \
     }                                                                         \
     memmove(&v->ptr[i+num], &v->ptr[i], sizeof(type)*(v->size - i) );         \
     for(size_t k = i ; k < i+num; k++)                                        \
@@ -886,17 +860,17 @@
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
-  M_F(name, _special_stable_sort)(array_t l)                                  \
+  M_F(name, _special_stable_sort)(array_t m_v)                                \
   {                                                                           \
-    if (M_UNLIKELY (l->size < 2))                                             \
+    if (M_UNLIKELY (m_v->size < 2))                                           \
       return;                                                                 \
     /* NOTE: if size is <= 4, no need to perform an allocation */             \
-    type *temp = M_CALL_REALLOC(oplist, type, NULL, l->size);                 \
+    type *temp = M_CALL_REALLOC(oplist, type, NULL, m_v->size);               \
     if (M_UNLIKELY_NOMEM (temp == NULL)) {                                    \
-      M_MEMORY_FULL(sizeof (type) * l->size);                                 \
+      M_MEMORY_FULL(sizeof (type) * m_v->size);                               \
       return ;                                                                \
     }                                                                         \
-    M_C3(m_arra4_,name,_stable_sort_noalloc)(l->ptr, l->size, temp);          \
+    M_C3(m_arra4_,name,_stable_sort_noalloc)(m_v->ptr, m_v->size, temp);      \
     M_CALL_FREE(oplist, temp);                                                \
   }                                                                           \
   ,) /* IF SWAP & SET methods */                                              \
@@ -948,12 +922,7 @@
          should have exhausted all memory before reaching such sizes. */      \
       M_ASSERT_INDEX(a1->size, newSize);                                      \
       if (newSize > a1->alloc) {                                              \
-        type *ptr = M_CALL_REALLOC(oplist, type, a1->ptr, newSize);           \
-        if (M_UNLIKELY_NOMEM (ptr == NULL) ) {                                \
-          M_MEMORY_FULL(sizeof (type) * newSize);                             \
-        }                                                                     \
-        a1->ptr = ptr;                                                        \
-        a1->alloc = newSize;                                                  \
+      M_C3(m_arra4_,name,_realloc)(a1, newSize);                              \
       }                                                                       \
       M_ASSERT(a1->ptr != NULL);                                              \
       M_ASSERT(a2->ptr != NULL);                                              \
