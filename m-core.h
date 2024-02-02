@@ -3404,6 +3404,7 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
 #define M_LIMITS_LIMITS(a)       ,a,
 #define M_PROPERTIES_PROPERTIES(a) ,a,
 #define M_EMPLACE_TYPE_EMPLACE_TYPE(a) ,a,
+#define M_USER_DATA_USER_DATA(a) ,a,
 // As attribute customization
 #define M_NEW_NEW(a)             ,a,
 #define M_DEL_DEL(a)             ,a,
@@ -3495,6 +3496,7 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
 #define M_GET_LIMITS(...)    M_GET_METHOD(LIMITS,      M_LIMITS_DEFAULT,   __VA_ARGS__)
 #define M_GET_PROPERTIES(...) M_GET_METHOD(PROPERTIES, (),                 __VA_ARGS__)
 #define M_GET_EMPLACE_TYPE(...) M_GET_METHOD(EMPLACE_TYPE, M_NO_DEFAULT,   __VA_ARGS__)
+#define M_GET_USER_DATA(...) M_GET_METHOD(USER_DATA,   M_NO_DEFAULT,       __VA_ARGS__)
 // As attribute customization
 #define M_GET_NEW(...)       M_GET_METHOD(NEW,         M_NEW_DEFAULT,      __VA_ARGS__)
 #define M_GET_DEL(...)       M_GET_METHOD(DEL,         M_DEL_DEFAULT,      __VA_ARGS__)
@@ -3573,6 +3575,7 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
 //#define M_CALL_LIMITS(oplist, ...) M_APPLY_API(M_GET_LIMITS oplist, oplist, __VA_ARGS__)
 //#define M_CALL_PROPERTIES(oplist, ...) M_APPLY_API(M_GET_PROPERTIES oplist, oplist, __VA_ARGS__)
 //#define M_CALL_EMPLACE_TYPE(oplist, ...) M_APPLY_API(M_GET_EMPLACE_TYPE oplist, oplist, __VA_ARGS__)
+//#define M_CALL_USER_DATA(oplist, ...) M_APPLY_API(M_GET_USER_DATA oplist, oplist, __VA_ARGS__)
 // As attribute customization
 #define M_CALL_DEL(oplist, ...) M_APPLY_API(M_GET_DEL oplist, oplist, __VA_ARGS__)
 #define M_CALL_REALLOC(oplist, ...) M_APPLY_API(M_GET_REALLOC oplist, oplist, __VA_ARGS__)
@@ -3632,7 +3635,7 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
 #define M_OPLAPI_EXTRACT_API_7(...)  __VA_ARGS__
 
 
-/* Generic API transformation.
+/* Generic API transformation (GAIA).
  * The API itself is described in the operator mapping with the method name.
  *
  * Usage in oplist:
@@ -3649,6 +3652,7 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
  *   - ARG[1-9] : the associated argument number of the operator
  *   - ARGPTR[1-9] : the pointer of the associated argument number of the operator
  *   - OPLIST: the oplist
+ *   - USER: The user data provided by the user to the container
  */
 
 /* Needed duplicate of M_RET_ARG2 as we call it within a M_RET_ARG2
@@ -3689,6 +3693,18 @@ M_INLINE size_t m_core_cstr_hash(const char str[])
 #define M_REORDER_ARGLIST_FUNC_ARGPTR7(arglist)  , & M_RET_ARG8  arglist ,
 #define M_REORDER_ARGLIST_FUNC_ARGPTR8(arglist)  , & M_RET_ARG9  arglist ,
 #define M_REORDER_ARGLIST_FUNC_ARGPTR9(arglist)  , & M_RET_ARG10  arglist ,
+
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG1(arglist)  , sizeof ( M_RET_ARG2  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG2(arglist)  , sizeof ( M_RET_ARG3  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG3(arglist)  , sizeof ( M_RET_ARG4  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG4(arglist)  , sizeof ( M_RET_ARG5  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG5(arglist)  , sizeof ( M_RET_ARG6  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG6(arglist)  , sizeof ( M_RET_ARG7  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG7(arglist)  , sizeof ( M_RET_ARG8  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG8(arglist)  , sizeof ( M_RET_ARG9  arglist ),
+#define M_REORDER_ARGLIST_FUNC_SIZEOFARG9(arglist)  , sizeof ( M_RET_ARG10  arglist ),
+
+#define M_REORDER_ARGLIST_FUNC_USER(arglist)   , m_user_data ,
 
 #define M_REORDER_ARGLIST_FUNC_ID(arg)         , arg , M_EAT
 
@@ -4287,11 +4303,11 @@ m_core_parse2_enum (const char str[], const char **endptr)
    oplist has been recorded for this type.
  */
 #define M_LET(a, ...)                                                         \
-  M_ID(M_LETI0 ((M_REVERSE(a, __VA_ARGS__,                                    \
-                        M_IF(M_PARENTHESIS_P(a))(M_LETI_VAR_NAME_A,           \
-                                                 M_LETI_VAR_NAME_B)(a) ))))
+  M_ID(M_LETI0 ((M_REVERSE(a, __VA_ARGS__, M_LETI_VAR_NAME(a)  ))))
 
 // 1b. Generate a unique name based on the first variable and the line number
+#define M_LETI_VAR_NAME(a)                                                    \
+  M_IF(M_PARENTHESIS_P(a))(M_LETI_VAR_NAME_A, M_LETI_VAR_NAME_B)(a)
 #define M_LETI_VAR_NAME_A(var) M_C3(_local_cont_, M_RET_ARG1 var, __LINE__)
 #define M_LETI_VAR_NAME_B(var) M_C3(_local_cont_, var, __LINE__)
 // 2. Evaluate with or without and inject oplist
@@ -4962,6 +4978,61 @@ m_core_parse2_enum (const char str[], const char **endptr)
     M_CALL_CLEAR(oplist, data);                                               \
     return ret;                                                               \
   }
+
+
+/************************************************************/
+/******************* EMBEDDED  USER DATA ********************/
+/************************************************************/
+
+// LIMITATION: USER_DATA shall be compatible with M_BASIC_OPLIST or M_PTR_OPLIST
+// Only integer or pointers are supported.
+// Nothing is called on destruction
+
+// Within a generated service, 'm_user_data' refers to the provided user_data
+
+// Expand to an instruction valid but without any effect.
+#define M_USER_VOID(...) (void) 0
+
+// Expand to a user data field, to be embedded in the structure
+#define M_USER_FIELD(opl)        M_IF_METHOD(USER_DATA, opl)(M_USER_FIELD_EXPAND, M_EAT)(opl)
+#define M_USER_FIELD_EXPAND(opl) M_GET_USER_DATA opl user_data;
+
+// Expand to a user data parameter, to be used in a function prototype
+#define M_USER_PARAM(opl)        M_IF_METHOD(USER_DATA, opl)(M_USER_PARAM_EXPAND, M_EAT)(opl)
+#define M_USER_PARAM_EXPAND(opl) , M_GET_USER_DATA opl m_user_data
+
+// Expand to a user data parameter, to be used for calling a function
+#define M_USER_CALL(opl, value) M_IF_METHOD(USER_DATA, opl)(M_USER_CALL_EXPAND, M_EAT)(opl, value)
+#define M_USER_CALL_EXPAND(opl, value) , value
+
+// Initialize a user data from its given value
+#define M_USER_INIT(opl, v, value)  M_IF_METHOD(USER_DATA, opl)(M_USER_INIT_EXPAND, M_USER_VOID)(opl, v, value)
+#define M_USER_INIT_EXPAND(opl, v, value) v->user_data = value;
+
+// Return the user data of an object (It is assumed the use is discarded if not enabled)
+#define M_USER_DATA(obj) obj->user_data
+
+// Generate set / get user_data method
+#define M_USER_DEF_GEN(opl, name, type)        M_IF_METHOD(USER_DATA, opl)(M_USER_DEF_GEN_EXPAND, M_EAT)(opl, name, type)
+#define M_USER_DEF_GEN_EXPAND(opl, name, type)                                \
+ M_INLINE M_GET_USER_DATA opl M_F(name, _user_data)(type const v) { return v->user_data; } \
+ M_INLINE void M_F(name, _update_user_data)(type v, M_GET_USER_DATA opl m_user_data) { v->user_data = m_user_data; }
+
+// To be used in oplist instead of INIT method
+#define M_USER_INIT_OPERATOR(name, opl)                                       \
+  M_IF_METHOD(USER_DATA, opl)( INIT(API(M_F(name,_init), NONE, ARG1, USER)) M_DEFERRED_COMMA USER_DATA(M_GET_USER_DATA opl), \
+                               INIT(M_F(name, _init)) )
+
+// Create a link between the user data of the objet and the oplist CALLS which will try to use it:
+// Create a temp variable named m_user_data
+#define M_USER_LINK(opl, var) M_IF_METHOD(USER_DATA, opl)(M_USER_LINK_EXPAND, M_USER_VOID)(opl, var)
+#define M_USER_LINK_EXPAND(opl, var)  M_GET_USER_DATA opl const m_user_data = M_USER_DATA(var); (void) m_user_data
+
+// To be used before a M_LET to link the variables of the M_LET to the provided user data for initialization
+#define M_USING_USER_DATA(type, val) M_USING_USER_DATA_EXPAND(type, val, M_C(m_var_user_data, __LINE__))
+#define M_USING_USER_DATA_EXPAND(type, val, cont) \
+  for(bool cont = true; cont; cont = false)                                   \
+  for(type const m_user_data = val; cont ; cont = false)
 
 
 /************************************************************/

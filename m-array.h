@@ -81,7 +81,7 @@
 /* FIXME: Do we want to export some methods as they are slow and 
    are not fit to be used for building other methods (like _it_remove)? */
 #define M_ARRA4_OPLIST_P3(name, oplist)                                       \
-  (INIT(M_F(name, _init))                                                     \
+  ( M_USER_INIT_OPERATOR(name, oplist),                                       \
    ,M_IF_METHOD2(INIT_SET,SET, oplist)(INIT_SET(M_F(name, _init_set)),)       \
    ,M_IF_METHOD(INIT_SET, oplist)(INIT_WITH(API_1(M_INIT_WITH_VAI)),)         \
    ,M_IF_METHOD2(INIT_SET,SET, oplist)(SET(M_F(name, _set)), )                \
@@ -173,7 +173,8 @@
   M_CHECK_COMPATIBLE_OPLIST(name, 1, type, oplist)                            \
   M_ARRA4_DEF_CORE(name, type, oplist, array_t, it_t)                         \
   M_ARRA4_DEF_IO(name, type, oplist, array_t, it_t)                           \
-  M_EMPLACE_QUEUE_DEF(name, array_t, M_F(name, _emplace_back), oplist, M_ARRA4_EMPLACE_DEF)
+  M_EMPLACE_QUEUE_DEF(name, array_t, M_F(name, _emplace_back), oplist, M_ARRA4_EMPLACE_DEF) \
+  M_USER_DEF_GEN(oplist, name, array_t)
 
 /* Define the types */
 #define M_ARRA4_DEF_TYPE(name, type, oplist, array_t, it_t)                   \
@@ -183,6 +184,7 @@
     size_t size;            /* Number of elements in the array */             \
     size_t alloc;           /* Allocated size for the array base */           \
     type *ptr;              /* Pointer to the array base */                   \
+    M_USER_FIELD(oplist)                                                      \
   } array_t[1];                                                               \
                                                                               \
   /* Define an iterator over an array */                                      \
@@ -202,10 +204,11 @@
 #define M_ARRA4_DEF_CORE(name, type, oplist, array_t, it_t)                   \
                                                                               \
   M_INLINE void                                                               \
-  M_F(name, _init)(array_t v)                                                 \
+  M_F(name, _init)(array_t v M_USER_PARAM(oplist))                            \
   {                                                                           \
     M_ASSERT (v != NULL);                                                     \
     /* Initially, the array is empty with nothing allocated */                \
+    M_USER_INIT(oplist, v, m_user_data);                                      \
     v->size  = 0;                                                             \
     v->alloc = 0;                                                             \
     v->ptr   = NULL;                                                          \
@@ -226,6 +229,7 @@
   M_F(name, _clear)(array_t v)                                                \
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
+    M_USER_LINK(oplist, v);                                                   \
     M_F(name, _reset)(v);                                                     \
     M_CALL_FREE(oplist, v->ptr);                                              \
     /* This is so reusing the object implies an assertion failure */          \
@@ -239,6 +243,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(d);                                                      \
     M_ARRA4_CONTRACT(s);                                                      \
+    M_USER_LINK(oplist, d);                                                   \
     if (M_UNLIKELY (d == s)) return;                                          \
     if (s->size > d->alloc) {                                                 \
       const size_t alloc = s->size;                                           \
@@ -266,7 +271,7 @@
   M_F(name, _init_set)(array_t d, const array_t s)                            \
   {                                                                           \
     M_ASSERT (d != s);                                                        \
-    M_F(name, _init)(d);                                                      \
+    M_F(name, _init)(d M_USER_CALL(oplist, M_USER_DATA(s)));                  \
     M_F(name, _set)(d, s);                                                    \
   }                                                                           \
   , /* No SET & INIT_SET */)                                                  \
@@ -317,6 +322,7 @@
   M_F(name, _push_raw)(array_t v)                                             \
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
+    M_USER_LINK(oplist, v);                                                   \
     if (M_UNLIKELY (v->size >= v->alloc)) {                                   \
       M_ASSERT(v->size == v->alloc);                                          \
       size_t alloc = M_CALL_INC_ALLOC(oplist, v->alloc);                      \
@@ -356,6 +362,7 @@
   M_INLINE type *                                                             \
   M_F(name, _push_new)(array_t v)                                             \
   {                                                                           \
+    M_USER_LINK(oplist, v);                                                   \
     type *data = M_F(name, _push_raw)(v);                                     \
     if (M_UNLIKELY (data == NULL) )                                           \
       return NULL;                                                            \
@@ -382,6 +389,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
     M_ASSERT_INDEX(key, v->size+1);                                           \
+    M_USER_LINK(oplist, v);                                                   \
     if (M_UNLIKELY (v->size >= v->alloc) ) {                                  \
       M_ASSERT(v->size == v->alloc);                                          \
       size_t alloc = M_CALL_INC_ALLOC(oplist, v->alloc);                      \
@@ -411,6 +419,7 @@
   M_F(name, _resize)(array_t v, size_t size)                                  \
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
+    M_USER_LINK(oplist, v);                                                   \
     if (v->size > size) {                                                     \
       /* Decrease size of array */                                            \
       for(size_t i = size ; i < v->size; i++)                                 \
@@ -440,6 +449,7 @@
   M_F(name, _reserve)(array_t v, size_t alloc)                                \
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
+    M_USER_LINK(oplist, v);                                                   \
     /* NOTE: Reserve below needed size to perform a shrink to fit */          \
     if (v->size > alloc) {                                                    \
       alloc = v->size;                                                        \
@@ -465,6 +475,7 @@
   M_F(name, _safe_get)(array_t v, size_t idx)                                 \
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
+    M_USER_LINK(oplist, v);                                                   \
     const size_t size = idx + 1;                                              \
     /* resize if needed */                                                    \
     if (v->size <= size) {                                                    \
@@ -589,6 +600,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(v);                                                      \
     M_ASSERT_INDEX(i, v->size+1);                                             \
+    M_USER_LINK(oplist, v);                                                   \
     size_t size = v->size + num;                                              \
     /* Test for overflow of variable size */                                  \
     if (M_UNLIKELY_NOMEM (size <= v->size)) {                                 \
@@ -888,6 +900,7 @@
   M_INLINE void                                                               \
   M_F(name, _special_stable_sort)(array_t l)                                  \
   {                                                                           \
+    M_USER_LINK(oplist, l);                                                   \
     if (M_UNLIKELY (l->size < 2))                                             \
       return;                                                                 \
     /* NOTE: if size is <= 4, no need to perform an allocation */             \
@@ -941,6 +954,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(a1);                                                     \
     M_ARRA4_CONTRACT(a2);                                                     \
+    M_USER_LINK(oplist, a1);                                                  \
     if (M_LIKELY (a2->size > 0)) {                                            \
       size_t newSize = a1->size + a2->size;                                   \
       /* To overflow newSize, we need to a1 and a2 a little bit above         \
