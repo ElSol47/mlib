@@ -1025,6 +1025,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(array);                                                  \
     M_ASSERT (str != NULL);                                                   \
+    M_USER_LINK(oplist, array);                                               \
     M_F(name,_reset)(array);                                                  \
     int c = *str++;                                                           \
     if (M_UNLIKELY (c != '[')) { c = 0; goto exit; }                          \
@@ -1053,6 +1054,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(array);                                                  \
     M_ASSERT (file != NULL);                                                  \
+    M_USER_LINK(oplist, array);                                               \
     M_F(name,_reset)(array);                                                  \
     int c = fgetc(file);                                                      \
     if (M_UNLIKELY (c != '[')) return false;                                  \
@@ -1100,6 +1102,7 @@
   {                                                                           \
     M_ARRA4_CONTRACT(array);                                                  \
     M_ASSERT (f != NULL && f->m_interface != NULL);                           \
+    M_USER_LINK(oplist, array);                                               \
     m_serial_return_code_t ret;                                               \
     m_serial_local_t local;                                                   \
     size_t estimated_size = 0;                                                \
