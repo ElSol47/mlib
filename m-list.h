@@ -109,7 +109,7 @@
    INIT_MOVE(M_F(name, _init_move)),                                          \
    SWAP(M_F(name, _swap)),                                                    \
    NAME(name),                                                                \
-   TYPE(M_F(name,_ct)), GENTYPE(struct M_F(name,_s)**),                       \
+   TYPE(M_F(name,_ct)), GENTYPE(struct M_F(name,_head_s)*),                   \
    SUBTYPE(M_F(name,_subtype_ct)),                                            \
    EMPTY_P(M_F(name,_empty_p)),                                               \
    IT_TYPE(M_F(name, _it_ct)),                                                \
@@ -207,10 +207,14 @@
 #define M_L1ST_DEF_TYPE(name, type, oplist, list_t, it_t)                     \
                                                                               \
   /* Define the node of a list, and the list as a pointer to a node */        \
-  typedef struct M_F(name, _s) {                                              \
+  struct M_F(name, _s) {                                                      \
     struct M_F(name, _s) *next;  /* Next node or NULL if final node */        \
     type data;                   /* The data itself */                        \
-  } *list_t[1];                                                               \
+  };                                                                          \
+                                                                              \
+  typedef struct M_F(name, _head_s) {                                         \
+    struct M_F(name, _s) *back;  /* Back node or NULL if none */              \
+  } list_t[1];                                                                \
                                                                               \
   /* Define an iterator of a list */                                          \
   typedef struct M_F(name, _it_s) {                                           \
@@ -239,15 +243,15 @@
   M_F(name, _init)(list_t v)                                                  \
   {                                                                           \
     M_ASSERT (v != NULL);                                                     \
-    *v = NULL;                                                                \
+    v->back = NULL;                                                           \
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
   M_F(name, _reset)(list_t v)                                                 \
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
-    struct M_F(name, _s) *it = *v;                                            \
-    *v = NULL;                                                                \
+    struct M_F(name, _s) *it = v->back;                                       \
+    v->back = NULL;                                                           \
     while (it != NULL) {                                                      \
       struct M_F(name, _s) *next = it->next;                                  \
       M_CALL_CLEAR(oplist, it->data);                                         \
@@ -267,8 +271,8 @@
   M_F(name, _back)(const list_t v)                                            \
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
-    M_ASSERT(*v != NULL);                                                     \
-    return &((*v)->data);                                                     \
+    M_ASSERT(v->back != NULL);                                                \
+    return &((v->back)->data);                                                \
   }                                                                           \
                                                                               \
   M_INLINE type *                                                             \
@@ -282,8 +286,8 @@
       return NULL;                                                            \
     }                                                                         \
     type *ret = &next->data;                                                  \
-    next->next = *v;                                                          \
-    *v = next;                                                                \
+    next->next = v->back;                                                     \
+    v->back = next;                                                           \
     M_L1ST_CONTRACT(v);                                                       \
     return ret;                                                               \
   }                                                                           \
@@ -313,14 +317,14 @@
   M_F(name, _pop_back)(type *data, list_t v)                                  \
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
-    M_ASSERT(*v != NULL);                                                     \
+    M_ASSERT(v->back != NULL);                                                \
     if (data != NULL) {                                                       \
-      M_DO_MOVE (oplist, *data, (*v)->data);                                  \
+      M_DO_MOVE (oplist, *data, (v->back)->data);                             \
     } else {                                                                  \
-      M_CALL_CLEAR(oplist, (*v)->data);                                       \
+      M_CALL_CLEAR(oplist, (v->back)->data);                                  \
     }                                                                         \
-    struct M_F(name, _s) *tofree = *v;                                        \
-    *v = (*v)->next;                                                          \
+    struct M_F(name, _s) *tofree = v->back;                                   \
+    v->back = (v->back)->next;                                                \
     M_C3(m_l1st_,name,_del)(tofree);                                          \
     M_L1ST_CONTRACT(v);                                                       \
   }                                                                           \
@@ -339,10 +343,10 @@
   M_F(name, _pop_move)(type *data, list_t v)                                  \
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
-    M_ASSERT(*v != NULL && data != NULL);                                     \
-    M_DO_INIT_MOVE (oplist, *data, (*v)->data);                               \
-    struct M_F(name, _s) *tofree = *v;                                        \
-    *v = (*v)->next;                                                          \
+    M_ASSERT(v->back != NULL && data != NULL);                                \
+    M_DO_INIT_MOVE (oplist, *data, (v->back)->data);                          \
+    struct M_F(name, _s) *tofree = v->back;                                   \
+    v->back = (v->back)->next;                                                \
     M_C3(m_l1st_,name,_del)(tofree);                                          \
     M_L1ST_CONTRACT(v);                                                       \
   }                                                                           \
@@ -351,7 +355,7 @@
   M_F(name, _empty_p)(const list_t v)                                         \
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
-    return *v == NULL;                                                        \
+    return v->back == NULL;                                                   \
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
@@ -359,7 +363,7 @@
   {                                                                           \
     M_L1ST_CONTRACT(l);                                                       \
     M_L1ST_CONTRACT(v);                                                       \
-    M_SWAP(struct M_F(name, _s) *, *l, *v);                                   \
+    M_SWAP(struct M_F(name, _s) *, l->back, v->back);                         \
     M_L1ST_CONTRACT(l);                                                       \
     M_L1ST_CONTRACT(v);                                                       \
   }                                                                           \
@@ -369,7 +373,7 @@
   {                                                                           \
     M_L1ST_CONTRACT(v);                                                       \
     M_ASSERT (it != NULL);                                                    \
-    it->current = *v;                                                         \
+    it->current = v->back;                                                    \
     it->previous = NULL;                                                      \
   }                                                                           \
                                                                               \
@@ -439,7 +443,7 @@
   {                                                                           \
     M_L1ST_CONTRACT(list);                                                    \
     size_t size = 0;                                                          \
-    struct M_F(name, _s) *it = *list;                                         \
+    struct M_F(name, _s) *it = list->back;                                    \
     while (it != NULL) {                                                      \
       size ++;                                                                \
       it = it->next;                                                          \
@@ -452,7 +456,7 @@
   {                                                                           \
     M_L1ST_CONTRACT(list);                                                    \
     M_ASSERT (itsub != NULL);                                                 \
-    struct M_F(name, _s) *it = *list;                                         \
+    struct M_F(name, _s) *it = list->back;                                    \
     while (it != NULL) {                                                      \
       if (it == itsub->current) return true;                                  \
       it = it->next;                                                          \
@@ -465,7 +469,7 @@
   M_F(name, _get)(const list_t list, size_t i)                                \
   {                                                                           \
     M_L1ST_CONTRACT(list);                                                    \
-    struct M_F(name, _s) *it = *list;                                         \
+    struct M_F(name, _s) *it = list->back;                                    \
     /* FIXME: How to avoid the double iteration over the list? */             \
     size_t len = M_F(name,_size)(list);                                       \
     M_ASSERT_INDEX (i, len);                                                  \
@@ -499,8 +503,8 @@
     M_CALL_INIT_SET(oplist, next->data, x);                                   \
     struct M_F(name, _s) *current = insertion_point->current;                 \
     if (M_UNLIKELY (current == NULL)) {                                       \
-      next->next = *list;                                                     \
-      *list = next;                                                           \
+      next->next = list->back;                                                \
+      list->back = next;                                                      \
     } else {                                                                  \
       next->next = current->next;                                             \
       current->next = next;                                                   \
@@ -520,7 +524,7 @@
     M_ASSERT(M_F(name, _sublist_p)(list, removing_point));                    \
     struct M_F(name, _s) *next = removing_point->current->next;               \
     if (M_UNLIKELY (removing_point->previous == NULL)) {                      \
-      *list = next;                                                           \
+      list->back = next;                                                      \
     } else {                                                                  \
       removing_point->previous->next = next;                                  \
     }                                                                         \
@@ -536,8 +540,8 @@
     M_L1ST_CONTRACT(org);                                                     \
     struct M_F(name, _s) *next, *it_org;                                      \
     struct M_F(name, _s) **update_list;                                       \
-    update_list = list;                                                       \
-    it_org = *org;                                                            \
+    update_list = &list->back;                                                \
+    it_org = org->back;                                                       \
     while (it_org != NULL) {                                                  \
       next = M_C3(m_l1st_,name,_new)();                                       \
       *update_list = next;                                                    \
@@ -567,8 +571,8 @@
   {                                                                           \
     M_L1ST_CONTRACT(org);                                                     \
     M_ASSERT (list != NULL && list != org);                                   \
-    *list = *org;                                                             \
-    *org = NULL;  /* safer */                                                 \
+    list->back = org->back;                                                   \
+    org->back = NULL;  /* safer */                                            \
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
@@ -591,7 +595,7 @@
     struct M_F(name, _s) *current = it->current;                              \
     struct M_F(name, _s) *next    = current->next;                            \
     if (it->previous == NULL) {                                               \
-      *ov = next;                                                             \
+      ov->back = next;                                                        \
     } else {                                                                  \
       it->previous->next = next;                                              \
     }                                                                         \
@@ -599,8 +603,8 @@
     /* it->previous doesn't need to be updated */                             \
     it->current = next;                                                       \
     /* Push back extracted 'current' in the list 'nv' */                      \
-    current->next = *nv;                                                      \
-    *nv = current;                                                            \
+    current->next = nv->back;                                                 \
+    nv->back = current;                                                       \
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
@@ -619,7 +623,7 @@
     M_ASSERT (current != NULL);                                               \
     struct M_F(name, _s) *next    = current->next;                            \
     if (opos->previous == NULL) {                                             \
-      *olist = next;                                                          \
+      olist->back = next;                                                     \
     } else {                                                                  \
       opos->previous->next = next;                                            \
     }                                                                         \
@@ -628,8 +632,8 @@
     /* Insert 'current' into 'nlist' just after 'npos' */                     \
     struct M_F(name, _s) *previous = npos->current;                           \
     if (M_UNLIKELY (previous == NULL)) {                                      \
-      current->next = *nlist;                                                 \
-      *nlist = current;                                                       \
+      current->next = nlist->back;                                            \
+      nlist->back = current;                                                  \
     } else {                                                                  \
       current->next = previous->next;                                         \
       previous->next = current;                                               \
@@ -647,28 +651,28 @@
     M_L1ST_CONTRACT(list1);                                                   \
     M_L1ST_CONTRACT(list2);                                                   \
     M_ASSERT (list1 != list2);                                                \
-    struct M_F(name, _s) **update_list = list1;                               \
-    struct M_F(name, _s) *it = *list1;                                        \
+    struct M_F(name, _s) **update_list = &list1->back;                        \
+    struct M_F(name, _s) *it = list1->back;                                   \
     while (it != NULL) {                                                      \
       update_list = &it->next;                                                \
       it = it->next;                                                          \
     }                                                                         \
-    *update_list = *list2;                                                    \
-    *list2 = NULL;                                                            \
+    *update_list = list2->back;                                               \
+    list2->back = NULL;                                                       \
   }                                                                           \
                                                                               \
   M_INLINE void                                                               \
   M_F(name, _reverse)(list_t list)                                            \
   {                                                                           \
     M_L1ST_CONTRACT(list);                                                    \
-    struct M_F(name, _s) *previous = NULL, *it = *list, *next;                \
+    struct M_F(name, _s) *previous = NULL, *it = list->back, *next;           \
     while (it != NULL) {                                                      \
       next = it->next;                                                        \
       it->next = previous;                                                    \
       previous = it;                                                          \
       it = next;                                                              \
     }                                                                         \
-    *list = previous;                                                         \
+    list->back = previous;                                                    \
   }                                                                           \
 
 
