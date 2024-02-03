@@ -5030,7 +5030,7 @@ m_core_parse2_enum (const char str[], const char **endptr)
 
 // To be used before a M_LET to link the variables of the M_LET to the provided user data for initialization
 #define M_USING_USER_DATA(type, val) M_USING_USER_DATA_EXPAND(type, val, M_C(m_var_user_data, __LINE__))
-#define M_USING_USER_DATA_EXPAND(type, val, cont) \
+#define M_USING_USER_DATA_EXPAND(type, val, cont)                             \
   for(bool cont = true; cont; cont = false)                                   \
   for(type const m_user_data = val; cont ; cont = false)
 
