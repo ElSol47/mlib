@@ -73,7 +73,7 @@
     list_t global_variable = LIST_INIT_VALUE();
  */
 #define M_LIST_INIT_VALUE()                                                   \
-  { NULL }
+  { { NULL } }
 
 
 /* Define an init value to init global variables of type dual push list.
